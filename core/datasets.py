@@ -43,7 +43,7 @@ class Merging_Dataset:
         name, index = self.datasets[index]
         return self.data_dic[name][index]
 
-class Dataset_For_Folder(torch.data.utils.Dataset):
+class Dataset_For_Folder(torch.utils.data.Dataset):
     def __init__(self, root_dir, domain, class_names, transform=None):
         self.transform = transform
 
@@ -60,8 +60,10 @@ class Dataset_For_Folder(torch.data.utils.Dataset):
             for extension in ['.jpg', '.jpeg', '.png']:
                 dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension)]
             
-            if len(dataset_per_class_name) != len(os.path.isdir(image_dir)):
-                print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name, len(os.path.isdir(image_dir)))))
+            if len(dataset_per_class_name) != len(os.listdir(image_dir)):
+                print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name), len(os.listdir(image_dir))))
+
+            self.dataset += dataset_per_class_name
         
     def __len__(self):
         return len(self.dataset)

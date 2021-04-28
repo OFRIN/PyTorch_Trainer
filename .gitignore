@@ -157,3 +157,7 @@ dmypy.json
 experiments/
 *.pth
 *.zip
+
+## customized files ## 
+data/nude.txt
+examples/
