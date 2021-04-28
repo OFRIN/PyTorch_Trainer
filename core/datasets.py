@@ -1,11 +1,12 @@
+import os
 import glob
 import torch
+
 import numpy as np
 
-from tools.data.reader import SH_Dataset
-from tools.data.utils import decode_image
-from tools.general.json_utils import read_json
+from PIL import Image
 
+from tools.general.json_utils import read_json
 from tools.ai.torch_utils import one_hot_embedding
 
 class Iterator:
@@ -42,33 +43,34 @@ class Merging_Dataset:
         name, index = self.datasets[index]
         return self.data_dic[name][index]
 
-class Dataset_For_Visualization(SH_Dataset):
-    def __init__(self, data_dir, domain):
-        super().__init__(data_dir + f'{domain}/*.sang', None, debug=True)
-        
-    def decode(self, example):
-        image = decode_image(example['image'])
-
-        human_label = example['human_tags']
-        google_label = example['google_tags']
-
-        return image, human_label, google_label
-
 class Dataset_For_Folder(torch.data.utils.Dataset):
-    def __init__(self, )
+    def __init__(self, root_dir, domain, class_names, transform=None):
+        self.transform = transform
 
-class Dataset_For_OGQ_3M(SH_Dataset):
-    def __init__(self, data_dir, domain, data_dic, transform):
-        super().__init__(data_dir + f'{domain}/*.sang', transform, debug=True)
+        self.class_names = class_names
+        self.classes = len(self.class_names)
+
+        data_dir = root_dir + domain + '/'
+        self.dataset = []
+
+        for label, class_name in enumerate(class_names):
+            dataset_per_class_name = []
+            image_dir = data_dir + class_name + '/'
+
+            for extension in ['.jpg', '.jpeg', '.png']:
+                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension)]
+            
+            if len(dataset_per_class_name) != len(os.path.isdir(image_dir)):
+                print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name, len(os.path.isdir(image_dir)))))
         
-        self.class_names = np.asarray(data_dic['class_names'])
-        self.class_dic = {name : index for index, name in enumerate(self.class_names)}
-        self.classes = data_dic['classes']
-    
-    def decode(self, example):
-        image = decode_image(example['image'])
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        image_path, label = self.dataset[index]
+
+        image = Image.open(image_path).convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
 
-        label = one_hot_embedding([self.class_dic[name] for name in example['google_tags'] if name in self.class_names], self.classes)
         return image, label
