@@ -1,0 +1,2 @@
+# human, min=1.0, max=300.0, mean_v=144.6875
+# machine, min=1.0, max=22.0, mean_v=11.5
