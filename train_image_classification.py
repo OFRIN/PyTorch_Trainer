@@ -21,9 +21,9 @@ from torch.utils.data import DataLoader
 from core.networks import *
 from core.datasets import *
 from core.losses import *
-from core.tag_utils import *
 
 from tools.general.io_utils import *
+from tools.general.txt_utils import *
 from tools.general.time_utils import *
 from tools.general.json_utils import *
 
@@ -44,46 +44,37 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', default=0, type=int)
 parser.add_argument('--num_workers', default=4, type=int)
 
-parser.add_argument('--train_dataset', default='OGQ_3M', type=str)
-
-parser.add_argument('--train_data_dirs', default='../OGQ-3M_SH/', type=str)
-parser.add_argument('--train_domains', default='all', type=str) # train, validation, test, *
-
-parser.add_argument('--test_data_dir', default='../OPIV6_SH/', type=str)
-parser.add_argument('--test_domain', default='validation', type=str) 
-
-parser.add_argument('--early_stop', default=True, type=str2bool) 
+parser.add_argument('--dataset_name', default='leak', type=str)
+parser.add_argument('--root_dir', default='D:/Leak_Detection/', type=str)
 
 ###############################################################################
 # Network
 ###############################################################################
-parser.add_argument('--architecture', default='efficientnet-b0', type=str)
+parser.add_argument('--architecture', default='efficientnet-b5', type=str)
 
 ###############################################################################
 # Hyperparameter
 ###############################################################################
+parser.add_argument('--image_size', default=224, type=int)
 parser.add_argument('--batch_size', default=256, type=int)
+
 parser.add_argument('--max_epoch', default=100, type=int)
 
 parser.add_argument('--lr', default=0.1, type=float)
 parser.add_argument('--wd', default=1e-4, type=float)
 parser.add_argument('--nesterov', default=True, type=str2bool)
+parser.add_argument('--scheduler', default='step', type=str)
 
-parser.add_argument('--image_size', default=224, type=int)
 parser.add_argument('--print_ratio', default=0.1, type=float)
 parser.add_argument('--val_ratio', default=0.5, type=float)
 
 parser.add_argument('--tag', default='', type=str)
-parser.add_argument('--augment', default='', type=str)
 
-parser.add_argument('--gamma', default=4, type=int)
-parser.add_argument('--alpha', default=1, type=float)
-
-parser.add_argument('--losses', default='focal', type=str)
-
-parser.add_argument('--source', default='google', type=str) # for opiv6
+parser.add_argument('--loss_fn', default='ce', type=str)
+parser.add_argument('--augment_fn', default='base', type=str)
 
 parser.add_argument('--amp', default=False, type=str2bool)
+parser.add_argument('--pretrained_model_path', default='', type=str)
 
 if __name__ == '__main__':
     ###################################################################################
@@ -118,15 +109,25 @@ if __name__ == '__main__':
 
     normalize_fn = Normalize(imagenet_mean, imagenet_std)
     
-    train_transforms = [
-        transforms.RandomResizedCrop(args.image_size),
-        RandomHorizontalFlip(),
-    ]
+    if args.augment_fn == 'base':
+        train_transforms = [
+            transforms.RandomResizedCrop(args.image_size),
+            RandomHorizontalFlip(),
+        ]
 
-    if 'colorjitter' in args.augment:
-        train_transforms.append(transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1))
-    if 'randaugment' in args.augment:
-        train_transforms.append(RandAugmentMC(n=2, m=10))
+    elif args.augment_fn == 'colorjitter':
+        train_transforms = [
+            transforms.RandomResizedCrop(args.image_size),
+            RandomHorizontalFlip(),
+            train_transforms.append(transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1))
+        ]
+
+    elif args.augment_fn == 'randaugment':
+        train_transforms = [
+            transforms.RandomResizedCrop(args.image_size),
+            RandomHorizontalFlip(),
+            train_transforms.append(RandAugmentMC(n=2, m=10))
+        ]
     
     train_transform = transforms.Compose(train_transforms + \
         [
@@ -143,29 +144,12 @@ if __name__ == '__main__':
     ])
     
     # 2. Dataset
-    data_dic = read_json(f'./data/{args.train_dataset}.json', encoding='utf-8')
+    class_names = read_txt(f'./data/{args.dataset_name}.txt')
+    num_classes = len(class_names)
 
-    args.train_domains = args.train_domains.replace('all', '*')
+    train_dataset = Dataset_For_Folder(args.root_dir, 'train', class_names, train_transform)
+    valid_dataset = Dataset_For_Folder(args.root_dir, 'validation', class_names, test_transform)
 
-    train_datasets = []
-    for data_dir, domain in zip(args.train_data_dirs.split(','), args.train_domains.split(',')):
-        if 'OPIV6' in data_dir:
-            dataset_class_fn = Dataset_For_OPIV6
-        else:
-            dataset_class_fn = Dataset_For_OGQ_3M
-
-        train_datasets.append(dataset_class_fn(data_dir, domain, data_dic, train_transform))
-
-    train_dataset = Merging_Dataset(train_datasets)
-
-    if 'OGQ' in args.test_data_dir:
-        valid_dataset = Dataset_For_OGQ_3M(args.test_data_dir, args.test_domain, data_dic, test_transform)
-    else:
-        valid_dataset = Dataset_For_OPIV6(args.test_data_dir, args.test_domain, data_dic, test_transform)
-
-    # train_dataset = Dataset_For_PIXTA_18M(args.train_data_dir, args.train_domain, data_dic, train_transform)
-    # valid_dataset = Dataset_For_PIXTA_18M(args.test_data_dir, args.test_domain, data_dic, test_transform)
-    
     # 3. DataLoader
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=True, drop_last=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=False, drop_last=False)
@@ -177,9 +161,6 @@ if __name__ == '__main__':
     log_func('[i] val_iteration is {}'.format(val_iteration))
     log_func('[i] log_iteration is {}'.format(log_iteration))
     log_func('[i] max_iteration is {}'.format(max_iteration))
-
-    class_names = np.asarray(data_dic['class_names'])
-    num_classes = data_dic['classes']
     
     log_func('[i] The size of training set is {}'.format(len(train_dataset)))
     log_func('[i] num_classes is {}'.format(num_classes))
@@ -211,40 +192,41 @@ if __name__ == '__main__':
     save_model_fn = lambda: save_model(model, model_path, parallel=the_number_of_gpu > 1)
     
     # load pretrained model
-    # if os.path.isfile(option['pretrained_model_path']):
-    #     log_func('[i] load pretrained model path : {}'.format(option['pretrained_model_path']))
+    if args.pretrained_model_path != '':
+        # For PIXTA
+        pretrained_model = Tagging(args.architecture, 16849)
+        load_model(pretrained_model, args.pretrained_model_path)
+        
+        transfer_model(pretrained_model, model, 'classifier')
 
-    #     pretrained_model = Classifier(args.model_name, train_dataset.classes, args.pretrained)
-    #     load_model(pretrained_model, option['pretrained_model_path'])
-
-    #     transfer_model(pretrained_model, model)
+        log_func('[i] Transfer Learning ({})'.format(args.pretrained_model_path))
     
     ###################################################################################
     # Loss, Optimizer
     ###################################################################################
-    if 'ce' in args.losses:
-        class_loss_fn = F.multilabel_soft_margin_loss
-    elif 'focal' in args.losses:
-        class_loss_fn = Focal_Loss(gamma=args.gamma, alpha=args.alpha).cuda()
-    elif 'lsep' in args.losses:
-        class_loss_fn = LSEP_Loss().cuda()
-
+    if 'ce' in args.loss_fn:
+        class_loss_fn = nn.CrossEntropyLoss().cuda()
+    
     log_func('[i] The number of pretrained weights : {}'.format(len(param_groups[0])))
     log_func('[i] The number of pretrained bias : {}'.format(len(param_groups[1])))
     log_func('[i] The number of scratched weights : {}'.format(len(param_groups[2])))
     log_func('[i] The number of scratched bias : {}'.format(len(param_groups[3])))
 
     # 2. Optimizer
-    optimizer = PolyOptimizer([
-        {'params': param_groups[0], 'lr': args.lr, 'weight_decay': args.wd},
-        {'params': param_groups[1], 'lr': 2*args.lr, 'weight_decay': 0},
-        {'params': param_groups[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
-        {'params': param_groups[3], 'lr': 20*args.lr, 'weight_decay': 0},
-    ], lr=args.lr, momentum=0.9, weight_decay=args.wd, max_step=max_iteration, nesterov=args.nesterov)
+    if args.scheduler == 'poly':
+        optimizer = PolyOptimizer([
+            {'params': param_groups[0], 'lr': args.lr, 'weight_decay': args.wd},
+            {'params': param_groups[1], 'lr': 2*args.lr, 'weight_decay': 0},
+            {'params': param_groups[2], 'lr': 10*args.lr, 'weight_decay': args.wd},
+            {'params': param_groups[3], 'lr': 20*args.lr, 'weight_decay': 0},
+        ], lr=args.lr, momentum=0.9, weight_decay=args.wd, max_step=max_iteration, nesterov=args.nesterov)
+        scheduler = None
 
-    if args.amp:
-        scaler = torch.cuda.amp.GradScaler(enabled=args.amp)   
-    
+    elif args.scheduler == 'step':
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd, nesterov=args.nesterov)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(max_iteration * 0.5), int(max_iteration * 0.75)], gamma=0.1)
+
     #################################################################################################
     # Train
     #################################################################################################
@@ -259,10 +241,9 @@ if __name__ == '__main__':
     ])
 
     eval_timer = Timer()
-    thresholds = list(np.arange(0.10, 1.00, 0.10))
 
     def evaluate():
-        meter_dic = {th : {'P':np.zeros(num_classes, dtype=np.float32), 'T':np.zeros(num_classes, dtype=np.float32), 'TP':np.zeros(num_classes, dtype=np.float32)} for th in thresholds}
+        accuracy_list = [[] for _ in range(len(num_classes))]
         
         with torch.no_grad():
             length = len(valid_loader)
@@ -272,66 +253,28 @@ if __name__ == '__main__':
 
                 with torch.cuda.amp.autocast(enabled=args.amp):
                     logits = model(images)
-                    preds = torch.sigmoid(logits)
+                    _, preds = torch.max(logits, 1)
 
                 preds = get_numpy_from_tensor(preds)
                 labels = get_numpy_from_tensor(labels)
                 
                 for i in range(images.size()[0]):
-                    for th in thresholds:
-                        pred = (preds[i] >= th).astype(np.float32)
-                        gt = labels[i]
-
-                        meter_dic[th]['P'] += pred
-                        meter_dic[th]['T'] += gt
-                        meter_dic[th]['TP'] += (gt * (pred == gt)).astype(np.float32)
+                    accuracy_list[labels[i]].append(preds[i] == labels[i])
 
                 sys.stdout.write('\r# Evaluation [{}/{}]'.format(step + 1, length))
                 sys.stdout.flush()
         print()
 
-        op_list = []
-        or_list = []
-        o_f1_list = []
-
-        for th in sorted(meter_dic.keys()):
-            data = meter_dic[th]
-
-            P = data['P']
-            T = data['T']
-            TP = data['TP']
-
-            # FP = (P - TP) / (T + P - TP + 1e-10)
-            # FN = (T - TP) / (T + P - TP + 1e-10)
-            # TN = ALL - (T + TP + (P - TP) + (T - TP))
-            # print(np.mean(TN), np.mean(T), np.mean((P - TP)))
-
-            # TPR = np.mean(TP / (TP + FN + 1e-10))
-            # FPR = np.mean(FP / (FP + TN + 1e-10))
-
-            # print('TH : {:.2f}, TPR : {:.2f}, FPR : {:.2f}'.format(th, TPR, FPR))
-
-            overall_precision = np.sum(TP) / (np.sum(P) + 1e-5) * 100
-            overall_recall = np.sum(TP) / (np.sum(T) + 1e-5) * 100
-            overall_f1_score = 2 * ((overall_precision * overall_recall) / (overall_precision + overall_recall + 1e-5))
-
-            op_list.append(overall_precision)
-            or_list.append(overall_recall)
-            o_f1_list.append(overall_f1_score)
-
-        best_index = np.argmax(o_f1_list)
-        best_threshold = thresholds[best_index]
-
-        best_op = op_list[best_index]
-        best_or = or_list[best_index]
-        best_of = o_f1_list[best_index]
-
-        return best_threshold, best_op, best_or, best_of
+        mean_accuracy = [np.mean(accuracy_list[i]) for i in range(num_classes)]
+        return mean_accuracy
     
     writer = SummaryWriter(tensorboard_dir)
     train_iterator = Iterator(train_loader)
 
-    best_valid_f1_score = -1
+    best_valid_mean_accuracy = -1
+
+    if args.amp:
+        scaler = torch.cuda.amp.GradScaler(enabled=args.amp)   
 
     for iteration in range(max_iteration):
         #################################################################################################
@@ -354,14 +297,16 @@ if __name__ == '__main__':
         else:
             loss.backward()
             optimizer.step()
-
+        
+        if scheduler is not None:
+            scheduler.step()
+        
         train_meter.add({'loss':loss.item()})
         
         #################################################################################################
         # Log
         #################################################################################################
         if (iteration + 1) % log_iteration == 0:
-        # if True:
             loss = train_meter.get(clear=True)
             learning_rate = float(get_learning_rate_from_optimizer(optimizer))
             
@@ -390,21 +335,18 @@ if __name__ == '__main__':
         if (iteration + 1) % val_iteration == 0:
             model.eval()
 
-            th, valid_precision, valid_recall, valid_f1_score = evaluate()
+            mean_accuracy = evaluate()
             
-            if best_valid_f1_score == -1 or best_valid_f1_score < valid_f1_score:
-                best_valid_f1_score = valid_f1_score
+            if best_valid_mean_accuracy == -1 or best_valid_mean_accuracy < mean_accuracy:
+                best_valid_mean_accuracy = best_valid_mean_accuracy
 
                 save_model_fn()
                 log_func('[i] save model')
 
             data = {
                 'iteration' : iteration + 1,
-                'th' : th,
-                'valid_precision' : valid_precision,
-                'valid_recall' : valid_recall,
-                'valid_f1_score' : valid_f1_score,
-                'best_valid_f1_score' : best_valid_f1_score,
+                'mean_accuracy' : mean_accuracy,
+                'best_valid_mean_accuracy' : best_valid_mean_accuracy,
                 'time' : eval_timer.tok(clear=True),
             }
             data_dic['validation'].append(data)
@@ -412,24 +354,15 @@ if __name__ == '__main__':
             
             log_func('[i] \
                 iteration={iteration:,}, \
-                th={th:.2f}, \
-                valid_precision={valid_precision:.2f}%, \
-                valid_recall={valid_recall:.2f}%, \
-                valid_f1_score={valid_f1_score:.2f}%, \
-                best_valid_f1_score={best_valid_f1_score:.2f}%, \
+                mean_accuracy={mean_accuracy:.2f}%, \
+                best_valid_mean_accuracy={best_valid_mean_accuracy:.2f}%, \
                 time={time:.0f}sec'.format(**data)
             )
             
-            writer.add_scalar('Evaluation/threshold', th, iteration)
-            writer.add_scalar('Evaluation/valid_precision', valid_precision, iteration)
-            writer.add_scalar('Evaluation/valid_recall', valid_recall, iteration)
-            writer.add_scalar('Evaluation/valid_f1_score', valid_f1_score, iteration)
-            writer.add_scalar('Evaluation/best_valid_f1_score', best_valid_f1_score, iteration)
+            writer.add_scalar('Evaluation/mean_accuracy', mean_accuracy, iteration)
+            writer.add_scalar('Evaluation/best_valid_mean_accuracy', best_valid_mean_accuracy, iteration)
 
             model.train()
 
-            if args.early_stop:
-                break
-            
     print(args.tag)
 

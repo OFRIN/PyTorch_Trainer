@@ -43,6 +43,39 @@ class Merging_Dataset:
         name, index = self.datasets[index]
         return self.data_dic[name][index]
 
+class Dataset_For_Checking(torch.utils.data.Dataset):
+    def __init__(self, root_dir, domain, class_names):
+        self.class_names = class_names
+        self.classes = len(self.class_names)
+
+        data_dir = root_dir + domain + '/'
+        self.dataset = []
+
+        for label, class_name in enumerate(class_names):
+            dataset_per_class_name = []
+            image_dir = data_dir + class_name + '/'
+
+            for extension in ['.jpg', '.jpeg', '.png']:
+                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension)]
+            
+            if len(dataset_per_class_name) != len(os.listdir(image_dir)):
+                print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name), len(os.listdir(image_dir))))
+
+            self.dataset += dataset_per_class_name
+        
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        image_path, label = self.dataset[index]
+
+        try:
+            image = Image.open(image_path).convert('RGB')
+        except:
+            image = image_path
+        
+        return image, label
+
 class Dataset_For_Folder(torch.utils.data.Dataset):
     def __init__(self, root_dir, domain, class_names, transform=None):
         self.transform = transform

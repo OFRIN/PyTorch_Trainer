@@ -2,6 +2,9 @@
 # Introduction
 
 # Installation
+```sh
+pip install ray
+```
 
 # Preprocessing
 ```sh
