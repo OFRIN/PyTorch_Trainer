@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     else:
         image = Image.open(args.image_path).convert('RGB')
-        # image = image_transform(image)
+        image = image_transform(image)
 
         inputs = torch_transform(image).unsqueeze(0).cuda()
 
