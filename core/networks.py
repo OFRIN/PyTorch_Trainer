@@ -62,6 +62,21 @@ class Tagging(nn.Module):
 
         logits = self.classifier(x).view(b, -1)
         return logits
+
+    def make_cams(self, x):
+        x = F.relu(x)
+        x = x / (F.adaptive_max_pool2d(x, (1, 1)) + 1e-5)
+        return x
+
+    def forward_with_cam(self, x):
+        b = x.size()[0]
+        x = self.features(x)
+        f = self.classifier(x)
+        
+        x = self.global_average_pooling_2d(f, keepdims=True)
+        logits = x.view(b, -1)
+        
+        return logits, self.make_cams(f)
     
     def initialize(self, weights):
         for m in weights:
