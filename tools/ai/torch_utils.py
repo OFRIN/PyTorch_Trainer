@@ -93,16 +93,17 @@ def save_model(model, model_path, parallel=False):
     else:
         torch.save(model.state_dict(), model_path)
 
-def transfer_model(pretrained_model, model, ignore_name):
+def transfer_model(pretrained_model, model, ignore_name, debug=False):
     pretrained_dict = pretrained_model.state_dict()
     model_dict = model.state_dict()
     
     transfer_dict = {}
-    for k, v in pretrained_dict.items():
+    for (k, v), (_k, _v) in zip(pretrained_dict.items(), model_dict.items()):
         if ignore_name in k:
             continue
         
-        print(k, type(v), v.size())
+        if debug:
+            print(k, type(v), v.size())
 
         if k in model_dict:
             transfer_dict[k] = v 

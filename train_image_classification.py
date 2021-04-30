@@ -74,6 +74,7 @@ parser.add_argument('--loss_fn', default='ce', type=str)
 parser.add_argument('--augment_fn', default='base', type=str)
 
 parser.add_argument('--amp', default=False, type=str2bool)
+parser.add_argument('--freeze', default=False, type=str2bool)
 parser.add_argument('--pretrained_model_path', default='', type=str)
 
 if __name__ == '__main__':
@@ -168,16 +169,31 @@ if __name__ == '__main__':
     ###################################################################################
     # Network
     ###################################################################################
-    model = Tagging(args.architecture, num_classes)
+    model = Tagging(args.architecture, num_classes, freeze=args.freeze)
     param_groups = model.get_parameter_groups(print_fn=None)
     
     model = model.cuda()
-    model.train()
+
+    if not args.freeze:
+        model.train()
+    else:
+        model.eval()
 
     log_func('[i] Architecture is {}'.format(args.architecture))
     log_func('[i] Total Params: %.2fM'%(calculate_parameters(model)))
     log_func()
     
+    # load pretrained model
+    if args.pretrained_model_path != '':
+        # For PIXTA
+        pretrained_model = Tagging(args.architecture, 16849)
+        load_model(pretrained_model, args.pretrained_model_path)
+        
+        transfer_model(pretrained_model, model, 'classifier')
+        
+        log_func('[i] Transfer Learning ({})'.format(args.pretrained_model_path))
+        del pretrained_model
+
     try:
         use_gpu = os.environ['CUDA_VISIBLE_DEVICES']
     except KeyError:
@@ -190,16 +206,6 @@ if __name__ == '__main__':
 
     load_model_fn = lambda: load_model(model, model_path, parallel=the_number_of_gpu > 1)
     save_model_fn = lambda: save_model(model, model_path, parallel=the_number_of_gpu > 1)
-    
-    # load pretrained model
-    if args.pretrained_model_path != '':
-        # For PIXTA
-        pretrained_model = Tagging(args.architecture, 16849)
-        load_model(pretrained_model, args.pretrained_model_path)
-        
-        transfer_model(pretrained_model, model, 'classifier')
-
-        log_func('[i] Transfer Learning ({})'.format(args.pretrained_model_path))
     
     ###################################################################################
     # Loss, Optimizer
@@ -243,7 +249,7 @@ if __name__ == '__main__':
     eval_timer = Timer()
 
     def evaluate():
-        accuracy_list = [[] for _ in range(len(num_classes))]
+        accuracy_list = [[] for _ in range(num_classes)]
         
         with torch.no_grad():
             length = len(valid_loader)
@@ -265,7 +271,7 @@ if __name__ == '__main__':
                 sys.stdout.flush()
         print()
 
-        mean_accuracy = [np.mean(accuracy_list[i]) for i in range(num_classes)]
+        mean_accuracy = np.mean([np.mean(accuracy_list[i]) for i in range(num_classes)]) * 100
         return mean_accuracy
     
     writer = SummaryWriter(tensorboard_dir)
@@ -297,7 +303,7 @@ if __name__ == '__main__':
         else:
             loss.backward()
             optimizer.step()
-        
+
         if scheduler is not None:
             scheduler.step()
         
@@ -338,7 +344,7 @@ if __name__ == '__main__':
             mean_accuracy = evaluate()
             
             if best_valid_mean_accuracy == -1 or best_valid_mean_accuracy < mean_accuracy:
-                best_valid_mean_accuracy = best_valid_mean_accuracy
+                best_valid_mean_accuracy = mean_accuracy
 
                 save_model_fn()
                 log_func('[i] save model')
@@ -362,7 +368,8 @@ if __name__ == '__main__':
             writer.add_scalar('Evaluation/mean_accuracy', mean_accuracy, iteration)
             writer.add_scalar('Evaluation/best_valid_mean_accuracy', best_valid_mean_accuracy, iteration)
 
-            model.train()
+            if not args.freeze:
+                model.train()
 
     print(args.tag)
 

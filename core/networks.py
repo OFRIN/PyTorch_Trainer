@@ -7,7 +7,7 @@ from torchvision import models
 from .efficientnet_pytorch.model import EfficientNet
 
 class Tagging(nn.Module):
-    def __init__(self, model_name, num_classes, pretrained=True):
+    def __init__(self, model_name, num_classes, pretrained=True, freeze=False):
         super().__init__()
         
         if 'ghostnet' in model_name:
@@ -28,8 +28,11 @@ class Tagging(nn.Module):
             else:
                 self.model = EfficientNet.from_name(model_name)
             
-            # self.in_channels = 1280
-            self.in_channels = 2048
+            if 'b0' in model_name:
+                self.in_channels = 1280
+            else:
+                self.in_channels = 2048
+            
             self.features = self.model
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -38,6 +41,8 @@ class Tagging(nn.Module):
         self.classifier = nn.Conv2d(self.in_channels, num_classes, 1)
 
         self.initialize([self.classifier])
+
+        self.freeze = freeze
     
     def global_average_pooling_2d(self, x, keepdims=False):
         x = self.avg_pool(x)
@@ -50,8 +55,11 @@ class Tagging(nn.Module):
         x = self.features(x)
 
         x = self.global_average_pooling_2d(x, keepdims=True)
-
         x = self.dropout(x)
+
+        if self.freeze:
+            x = x.detach()
+
         logits = self.classifier(x).view(b, -1)
         return logits
     

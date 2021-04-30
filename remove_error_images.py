@@ -43,6 +43,10 @@ parser.add_argument('--root_dir', default='D:/Leak_Detection/', type=str)
 
 args = parser.parse_args()
 
+def add_txt(path):
+    with open(args.root_dir + 'error.txt', 'a') as f:
+        f.write(path + '\n')
+
 class_names = read_txt(f'./data/{args.dataset_name}.txt')
 num_classes = len(class_names)
 
@@ -58,8 +62,11 @@ for domain in ['train']:
 
         if isinstance(image, str):
             # print(image)
+            try:
+                os.remove(image)
+            except:
+                add_txt(image)
 
-            os.remove(image)
             removing_count += 1
     
     print()

@@ -56,7 +56,7 @@ class Dataset_For_Checking(torch.utils.data.Dataset):
             image_dir = data_dir + class_name + '/'
 
             for extension in ['.jpg', '.jpeg', '.png']:
-                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension)]
+                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
             
             if len(dataset_per_class_name) != len(os.listdir(image_dir)):
                 print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name), len(os.listdir(image_dir))))
@@ -91,11 +91,11 @@ class Dataset_For_Folder(torch.utils.data.Dataset):
             image_dir = data_dir + class_name + '/'
 
             for extension in ['.jpg', '.jpeg', '.png']:
-                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension)]
+                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
             
             if len(dataset_per_class_name) != len(os.listdir(image_dir)):
                 print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name), len(os.listdir(image_dir))))
-
+            
             self.dataset += dataset_per_class_name
         
     def __len__(self):

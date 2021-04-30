@@ -160,5 +160,7 @@ experiments/
 
 ## customized files ## 
 data/nude.txt
+data/leak.txt
+
 Commands.md
 examples/
