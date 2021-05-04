@@ -107,7 +107,7 @@ if __name__ == '__main__':
     # 1. Transform
     imagenet_mean = [0.485, 0.456, 0.406]
     imagenet_std = [0.229, 0.224, 0.225]
-
+    
     normalize_fn = Normalize(imagenet_mean, imagenet_std)
     
     if args.augment_fn == 'base':
@@ -185,7 +185,6 @@ if __name__ == '__main__':
     
     # load pretrained model
     if args.pretrained_model_path != '':
-        # For PIXTA
         pretrained_model = Tagging(args.architecture, 16849)
         load_model(pretrained_model, args.pretrained_model_path)
         
@@ -232,7 +231,7 @@ if __name__ == '__main__':
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd, nesterov=args.nesterov)
         # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(max_iteration * 0.5), int(max_iteration * 0.75)], gamma=0.1)
-
+    
     #################################################################################################
     # Train
     #################################################################################################

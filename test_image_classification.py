@@ -159,8 +159,13 @@ if __name__ == '__main__':
                 sys.stdout.flush()
         print()
 
+        mean_accuracy_list = []
         for class_name, accuracy in zip(class_names, accuracy_list):
-            print('# {} = {:.2f}%'.format(class_name, np.mean(accuracy) * 100))
+            accuracy = np.mean(accuracy)
+            mean_accuracy_list.append(accuracy)
+
+            print('# {} = {:.2f}%'.format(class_name, accuracy * 100))
+        print('# Mean Accuracy = {:.2f}%'.format(np.mean(mean_accuracy_list) * 100))
     
     mean_accuracy = evaluate()
     
