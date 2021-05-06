@@ -4,6 +4,7 @@
 import os
 import sys
 import copy
+import glob
 import shutil
 import random
 import argparse
@@ -45,6 +46,7 @@ parser.add_argument('--dataset_name', default='leak', type=str)
 
 parser.add_argument('--webcam_index', default=-1, type=int)
 parser.add_argument('--video_path', default=None, type=str)
+parser.add_argument('--image_dir', default=None, type=str)
 parser.add_argument('--image_path', default=None, type=str)
 
 ###############################################################################
@@ -116,15 +118,13 @@ if __name__ == '__main__':
     #################################################################################################
     eval_timer = Timer()
 
-    if args.webcam_index != -1 or args.video_path is not None:
-        if args.webcam_index != -1:
-            video = cv2.VideoCapture(args.webcam_index)
-        elif args.video_path is not None:
-            video = cv2.VideoCapture(args.video_path)
-
-    else:
-        image = Image.open(args.image_path).convert('RGB')
-        image = image_transform(image)
+    def process_for_image(image_path):
+        
+        try:
+            image = Image.open(image_path).convert('RGB')
+            image = image_transform(image)
+        except:
+            return None
 
         inputs = torch_transform(image).unsqueeze(0).cuda()
 
@@ -134,7 +134,7 @@ if __name__ == '__main__':
 
                 conf = F.softmax(logits, dim=1)[0].cpu().detach().numpy()
                 cam = cams[0].cpu().detach().numpy()
-
+        
         image = np.asarray(image)[..., ::-1]
         h, w, c = image.shape
 
@@ -142,12 +142,31 @@ if __name__ == '__main__':
 
         for class_name, class_activation_map, confidence in zip(class_names, cam, conf):
             class_activation_map = cv2.resize(class_activation_map, (w, h), interpolation=cv2.INTER_LINEAR)
-            class_activation_map = cv2.applyColorMap(class_activation_map, cv2.COLORMAP_JET)
+            
+            # class_activation_map = cv2.applyColorMap(class_activation_map, cv2.COLORMAP_JET)
+            # class_activation_map = cv2.addWeighted(image, 0.3, class_activation_map, 0.7, 0.0)
+
+            class_activation_map = image.astype(np.float32) * (class_activation_map[..., np.newaxis] / 255.).astype(np.float32)
+            class_activation_map = class_activation_map.astype(np.uint8)
+
+            cv2.imshow(class_name, class_activation_map)
 
             print('# {} = {:.2f}%'.format(class_name, confidence * 100))
 
-            class_activation_map = cv2.addWeighted(image, 0.3, class_activation_map, 0.7, 0.0)
-            cv2.imshow(class_name, class_activation_map)
-
-        # cv2.imshow('image', image)
+        cv2.imshow('image', image)
         cv2.waitKey(0)
+
+        print()
+
+    if args.webcam_index != -1 or args.video_path is not None:
+        if args.webcam_index != -1:
+            video = cv2.VideoCapture(args.webcam_index)
+        elif args.video_path is not None:
+            video = cv2.VideoCapture(args.video_path)
+
+    elif args.image_dir is not None:
+        for image_path in glob.glob(args.image_dir + '*'):
+            process_for_image(image_path)
+
+    else:
+        process_for_image(args.image_path)
