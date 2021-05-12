@@ -120,14 +120,14 @@ if __name__ == '__main__':
         train_transforms = [
             transforms.RandomResizedCrop(args.image_size),
             RandomHorizontalFlip(),
-            train_transforms.append(transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1))
+            transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1)
         ]
 
     elif args.augment_fn == 'randaugment':
         train_transforms = [
             transforms.RandomResizedCrop(args.image_size),
             RandomHorizontalFlip(),
-            train_transforms.append(RandAugmentMC(n=2, m=10))
+            RandAugmentMC(n=2, m=10)
         ]
     
     train_transform = transforms.Compose(train_transforms + \

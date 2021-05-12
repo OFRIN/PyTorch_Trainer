@@ -4,6 +4,10 @@
 # Installation
 ```sh
 pip install ray
+
+# to install google_images_download
+git clone https://github.com/Joeclinton1/google-images-download.git
+cd google-images-download && python setup.py install
 ```
 
 # Preprocessing
