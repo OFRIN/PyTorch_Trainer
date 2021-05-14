@@ -6,8 +6,6 @@ import multiprocessing as mp
 from google_images_download import google_images_download
 from tools.general.json_utils import read_json
 
-ray.init()
-
 @ray.remote
 def update(separated_class_names, limit):
     response = google_images_download.googleimagesdownload()
@@ -33,14 +31,18 @@ parser.add_argument('--num_imgs_per_tag', default=50, type=int)
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    cores = mp.cpu_count()
-    # ray.init(num_cpus=cores)
+    # cores = mp.cpu_count()
+    cores = 6
+    ray.init(num_cpus=cores)
 
     number_of_image_per_class = args.num_imgs_per_tag
     class_names = args.tags.split(',')
     
     ids = []
     size = len(class_names) // cores
+
+    print('# recognized cores : {}'.format(cores))
+    print('# size per core : {}'.format(size))
 
     for i in range(cores - 1):
         # ids.append(class_names[:size])

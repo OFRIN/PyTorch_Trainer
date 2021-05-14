@@ -90,7 +90,7 @@ class Dataset_For_Folder(torch.utils.data.Dataset):
             dataset_per_class_name = []
             image_dir = data_dir + class_name + '/'
 
-            for extension in ['.jpg', '.jpeg', '.png']:
+            for extension in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
                 dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
             
             if len(dataset_per_class_name) != len(os.listdir(image_dir)):
