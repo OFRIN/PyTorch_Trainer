@@ -2,29 +2,9 @@ import os
 import glob
 import torch
 
-import numpy as np
-
 from PIL import Image
 
-from tools.general.json_utils import read_json
-from tools.ai.torch_utils import one_hot_embedding
-
-class Iterator:
-    def __init__(self, loader):
-        self.loader = loader
-        self.init()
-
-    def init(self):
-        self.iterator = iter(self.loader)
-    
-    def get(self):
-        try:
-            data = next(self.iterator)
-        except StopIteration:
-            self.init()
-            data = next(self.iterator)
-        
-        return data
+from tools.ai import torch_utils
 
 class Merging_Dataset:
     def __init__(self, datasets):
@@ -43,69 +23,63 @@ class Merging_Dataset:
         name, index = self.datasets[index]
         return self.data_dic[name][index]
 
-class Dataset_For_Checking(torch.utils.data.Dataset):
-    def __init__(self, root_dir, domain, class_names):
+class Dataset_For_Folder(torch.utils.data.Dataset):
+    def __init__(self, 
+        root_dir, domain, class_names,
+        extensions=['.jpg', '.jpeg', '.png', '.webp', '.gif']):
+
         self.class_names = class_names
         self.classes = len(self.class_names)
 
         data_dir = root_dir + domain + '/'
         self.dataset = []
 
-        for label, class_name in enumerate(class_names):
+        for class_name in class_names:
             dataset_per_class_name = []
             image_dir = data_dir + class_name + '/'
 
-            for extension in ['.jpg', '.jpeg', '.png']:
-                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
+            for extension in extensions:
+                dataset_per_class_name += [[image_path, [class_name]] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
             
-            if len(dataset_per_class_name) != len(os.listdir(image_dir)):
-                print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name), len(os.listdir(image_dir))))
-
             self.dataset += dataset_per_class_name
-        
+    
     def __len__(self):
         return len(self.dataset)
-
+    
     def __getitem__(self, index):
         image_path, label = self.dataset[index]
-
+        
         try:
             image = Image.open(image_path).convert('RGB')
-        except:
             image = image_path
-        
+        except:
+            image = None
+
         return image, label
 
-class Dataset_For_Folder(torch.utils.data.Dataset):
-    def __init__(self, root_dir, domain, class_names, transform=None):
+class Dataset_For_Json(torch.utils.data.Dataset):
+    def __init__(self, data_dict, domain, task, transform=None):
+        self.task = task
         self.transform = transform
 
-        self.class_names = class_names
-        self.classes = len(self.class_names)
+        self.dataset = data_dict[domain]
 
-        data_dir = root_dir + domain + '/'
-        self.dataset = []
+        self.class_dict = data_dict['class_dict']
+        self.num_classes = data_dict['num_classes']
 
-        for label, class_name in enumerate(class_names):
-            dataset_per_class_name = []
-            image_dir = data_dir + class_name + '/'
-
-            for extension in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
-                dataset_per_class_name += [[image_path, label] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
-            
-            if len(dataset_per_class_name) != len(os.listdir(image_dir)):
-                print('[{}] miss match : {} / {}'.format(class_name, len(dataset_per_class_name), len(os.listdir(image_dir))))
-            
-            self.dataset += dataset_per_class_name
-        
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        image_path, label = self.dataset[index]
-
+        image_path, class_names = self.dataset[index]
+        
         image = Image.open(image_path).convert('RGB')
         if self.transform is not None:
             image = self.transform(image)
+
+        if self.task == 'multi-labels':
+            label = torch_utils.one_hot_embedding([self.class_dict[name] for name in class_names], self.num_classes)
+        else:
+            label = self.class_dict[class_names[0]]
 
         return image, label

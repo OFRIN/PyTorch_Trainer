@@ -18,7 +18,10 @@ class RandomResize:
         self.modes = [Image.BICUBIC, Image.NEAREST]
     
     def __call__(self, image, mode=Image.BICUBIC):
-        rand_image_size = random.randint(self.min_image_size, self.max_image_size)
+        if self.min_image_size != self.max_image_size:
+            rand_image_size = random.randint(self.min_image_size, self.max_image_size)
+        else:
+            rand_image_size = self.min_image_size
         
         w, h = image.size
         if w < h:

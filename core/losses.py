@@ -28,49 +28,17 @@ class Focal_Loss(nn.Module):
         else: 
             return loss.sum().float()
 
-class LSEP_Loss(nn.Module):
-    def __init__(self):
-        super(LSEP_Loss, self).__init__()
-    
-    def forward(self, inputs, targets):
-        """"
-        Parameters
-        ----------
-        inputs : logits
-        targets : multi-label binarized vector
-        """
-        
-        batch_size, classes = targets.size()[:2]
+def L1_Loss(A_tensors, B_tensors):
+    return torch.abs(A_tensors - B_tensors)
 
-        positive_indices = targets.gt(0).float() # value > 0
-        negative_indices = targets.eq(0).float() # value == 0
+def L2_Loss(A_tensors, B_tensors):
+    return torch.pow(A_tensors - B_tensors, 2)
 
-        # print(inputs)
-        # print(targets)
-        # print(positive_indices)
-        # print(negative_indices)
+# ratio = 0.2, top=20%
+def Online_Hard_Example_Mining(values, ratio=0.2):
+    b, c, h, w = values.size()
+    return torch.topk(values.reshape(b, -1), k=int(c * h * w * ratio), dim=-1)[0]
 
-        loss = 0.
-
-        for i in range(batch_size):
-            positive_mask = positive_indices[i].nonzero(as_tuple=False)
-            negative_mask = negative_indices[i].nonzero(as_tuple=False)
-
-            positive_examples = inputs[i, positive_mask]
-            negative_examples = inputs[i, negative_mask]
-
-            positive_examples = torch.transpose(positive_examples, 0, 1)
-
-            exp_sub = torch.exp(negative_examples - positive_examples)
-            exp_sum = torch.sum(exp_sub)
-
-            loss += torch.log(1 + exp_sum)
-            
-            # print(positive_examples, positive_examples.size())
-            # print(negative_examples, negative_examples.size())
-            # print(exp_sub)
-            # print(exp_sum)
-            # print(torch.log(1 + exp_sum))
-            # input()
-        
-        return loss / batch_size
+def shannon_entropy_loss(logits, activation=torch.sigmoid, epsilon=1e-5):
+    v = activation(logits)
+    return -torch.sum(v * torch.log(v+epsilon), dim=1).mean()

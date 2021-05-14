@@ -40,7 +40,7 @@ if __name__ == '__main__':
     
     ids = []
     size = len(class_names) // cores
-
+    
     print('# recognized cores : {}'.format(cores))
     print('# size per core : {}'.format(size))
 

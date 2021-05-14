@@ -160,6 +160,7 @@ experiments/
 
 ## customized files ## 
 data/nude.txt
+data/nude.json
 data/leak.txt
 
 Commands.md

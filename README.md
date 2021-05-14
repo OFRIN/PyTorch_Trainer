@@ -12,6 +12,7 @@ cd google-images-download && python setup.py install
 
 # Preprocessing
 ```sh
+python make_dataset.py 
 ```
 
 # Training

@@ -1,6 +1,3 @@
-# Copyright (C) 2020 * Ltd. All rights reserved.
-# author : Sanghyeon Jo <josanghyeokn@gmail.com>
-
 from .txt_utils import add_txt
 
 def log_print(string, path):
