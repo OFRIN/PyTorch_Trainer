@@ -37,6 +37,10 @@ class Parser:
             type = boolean
         
         self.parser.add_argument(f'--{tag}', default=default, type=type)
+
+    def add_from_list(self, dataset):
+        for data in dataset:
+            self.add(*data)
     
     def get_args(self):
         return self.parser.parse_args()

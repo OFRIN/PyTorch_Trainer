@@ -82,6 +82,31 @@ class Evaluator_For_Mean_Accuracy:
     def clear(self):
         self.accuracy_list = [[] for _ in range(self.num_classes)]
 
+class Evaluator_For_Multi_Label_Classification:
+    def __init__(self, class_names):
+        self.class_names = class_names
+        self.num_classes = len(self.class_names)
+
+        self.clear()
+
+    def add(self, pred, label):
+        self.accuracy_list[label].append(pred == label)
+
+    def get(self, detail=False, clear=True):
+        accuracy_dict = {name:np.mean(self.accuracy_list[label]) * 100 for name, label in zip(self.class_names, range(self.num_classes))}
+        mean_accuracy = np.mean(list(accuracy_dict.values()))
+
+        if clear:
+            self.clear()
+        
+        if detail:
+            return mean_accuracy, accuracy_dict
+        else:
+            return mean_accuracy
+
+    def clear(self):
+        self.accuracy_list = [[] for _ in range(self.num_classes)]
+
 class Evaluator_For_mIoU:
     def __init__(self, class_names, ignore_index=255):
         self.class_names = class_names

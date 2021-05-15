@@ -162,12 +162,12 @@ if __name__ == '__main__':
         # for pixta
         pretrained_model = networks.Classifier(args.architecture, args.pretrained_model_classes, pretrained=False)
         torch_utils.load_model(pretrained_model, args.pretrained_model_path)
-
+        
         torch_utils.transfer_model(pretrained_model, model, 'classifier')
         
         log_func('[i] Transfer Learning ({})'.format(args.pretrained_model_path))
         del pretrained_model
-
+    
     try:
         use_gpu = os.environ['CUDA_VISIBLE_DEVICES']
     except KeyError:

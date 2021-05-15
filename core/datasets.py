@@ -66,7 +66,7 @@ class Dataset_For_Json(torch.utils.data.Dataset):
 
         self.class_dict = data_dict['class_dict']
         self.num_classes = data_dict['num_classes']
-
+    
     def __len__(self):
         return len(self.dataset)
 

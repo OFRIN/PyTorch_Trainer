@@ -10,13 +10,28 @@ git clone https://github.com/Joeclinton1/google-images-download.git
 cd google-images-download && python setup.py install
 ```
 
-# Preprocessing
+# Preprocessing 
 ```sh
-python make_dataset.py 
+{
+    "class_names" : list,
+    "num_classes" : int,
+    "class_dict" : dict,
+
+    "train" : [
+        ["image_path", "labels"]
+    ],
+
+    "validation" : [
+        ["image_path", "labels"]
+    ],
+
+    "test" : [
+        ["image_path", "labels"]
+    ]
+}
 ```
 
 # Training
-
 1. Image Classification
 
 ```sh

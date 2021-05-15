@@ -168,3 +168,5 @@ examples/
 
 data/chromedriver.exe
 data/error.txt
+
+make_*.py

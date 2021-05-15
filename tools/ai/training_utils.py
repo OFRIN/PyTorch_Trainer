@@ -26,9 +26,7 @@ class Trainer:
         self.train_meter = io_utils.Average_Meter(self.log_names)
         
         self.writer = SummaryWriter(tensorboard_dir)
-
-        if self.amp:
-            self.scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
 
         self.num_iterations = len(self.loader)
         self.use_cuda = torch.cuda.is_available()
@@ -83,13 +81,18 @@ class Trainer:
             self.train_meter.add({name:loss.item() for name, loss in zip(self.log_names, losses)})
             
             self.optimizer.zero_grad()
-            if self.amp:
-                self.scaler.scale(losses[0]).backward()
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                losses[0].backward()
-                self.optimizer.step()
+            # if self.amp:
+            #     self.scaler.scale(losses[0]).backward()
+            #     self.scaler.step(self.optimizer)
+            #     self.scaler.update()
+            # else:
+            #     losses[0].backward()
+            #     self.optimizer.step()
+            
+            self.scaler.scale(losses[0]).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
         print('\r', end='')
 
         self.epoch += 1
