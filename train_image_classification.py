@@ -60,8 +60,8 @@ if __name__ == '__main__':
 
     parser.add('loss', 'ce', str)
     parser.add('task', 'multi-labels', str) # single-label or multi-labels
-    parser.add('train_augment', 'resize->crop->flip', str) 
-    parser.add('test_augment', 'resize->crop', str) 
+    parser.add('train_augment', 'resize-crop-flip', str) 
+    parser.add('test_augment', 'resize-crop', str) 
 
     parser.add('pretrained_model_classes', 16849, int)
     parser.add('pretrained_model_path', '', str)
@@ -95,28 +95,36 @@ if __name__ == '__main__':
     imagenet_mean = [0.485, 0.456, 0.406]
     imagenet_std = [0.229, 0.224, 0.225]
 
+    train_augment_dict = {
+        'mixmax_resize':augment_utils.RandomResize(args.min_image_size, args.max_image_size),
+        'flip':augment_utils.RandomHorizontalFlip(),
+        'resize':transforms.Resize(args.image_size, Image.BICUBIC),
+        'crop':transforms.RandomCrop(args.image_size),
+        'randaugment':randaugment.RandAugment(args.randaugment_n, args.randaugment_m),
+        'colorjitter':transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
+    }
+
+    test_augment_dict = {
+        'resize':transforms.Resize(args.image_size, Image.BICUBIC),
+        'crop':transforms.CenterCrop(args.image_size)
+    }
+
     train_transforms = []
-    for name in args.train_augment.split('->'):
-        if name == 'minmax_resize':
-            transform = augment_utils.RandomResize(args.min_image_size, args.max_image_size)
-        elif name == 'resize':
-            transform = transforms.Resize(args.image_size, Image.BICUBIC)
-        elif name == 'crop':
-            transform = transforms.RandomCrop(args.image_size)
-        elif name == 'flip':
-            transform = augment_utils.RandomHorizontalFlip()
-        elif name == 'randaugment':
-            transform = randaugment.RandAugment(args.randaugment_n, args.randaugment_m)
-        elif name == 'colorjitter':
-            transform = transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1)
+    for name in args.train_augment.split('-'):
+        if name in train_augment_dict.keys():
+            transform = train_augment_dict[name]
+        else:
+            raise ValueError('unrecognize name of transform ({})'.format(name))
+        
         train_transforms.append(transform)
     
     test_transforms = []
-    for name in args.train_augment.split('->'):
-        if name == 'resize':
-            transform = transforms.Resize(args.image_size, Image.BICUBIC)
-        elif name == 'crop':
-            transform = transforms.CenterCrop(args.image_size)
+    for name in args.test_augment.split('-'):
+        if name in test_augment_dict.keys():
+            transform = test_augment_dict[name]
+        else:
+            raise ValueError('unrecognize name of transform ({})'.format(name))
+        
         test_transforms.append(transform)
     
     essential_transform = [
@@ -162,7 +170,7 @@ if __name__ == '__main__':
         # for pixta
         pretrained_model = networks.Classifier(args.architecture, args.pretrained_model_classes, pretrained=False)
         torch_utils.load_model(pretrained_model, args.pretrained_model_path)
-        
+
         torch_utils.transfer_model(pretrained_model, model, 'classifier')
         
         log_func('[i] Transfer Learning ({})'.format(args.pretrained_model_path))
@@ -188,7 +196,7 @@ if __name__ == '__main__':
     # 8. Define losses
     ###################################################################################
     if args.loss == 'ce':
-        if args.task == 'multi-label':
+        if args.task == 'multi-labels':
             loss_fn = nn.MultiLabelSoftMarginLoss().cuda()
         else:
             loss_fn = nn.CrossEntropyLoss().cuda()
@@ -269,7 +277,7 @@ if __name__ == '__main__':
         # evaluation
         if epoch % args.valid_ratio == 0:
             valid_score, eval_time = evaluator.step()
-
+            
             if best_valid_score == -1 or best_valid_score < valid_score:
                 best_valid_score = valid_score
 

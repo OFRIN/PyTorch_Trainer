@@ -167,6 +167,8 @@ Commands.md
 examples/
 
 data/chromedriver.exe
-data/error.txt
 
-make_*.py
+data/nude_*.json
+
+make_fire_dataset.py
+make_nude_dataset.py

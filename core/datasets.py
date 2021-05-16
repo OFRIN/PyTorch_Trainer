@@ -23,40 +23,6 @@ class Merging_Dataset:
         name, index = self.datasets[index]
         return self.data_dic[name][index]
 
-class Dataset_For_Folder(torch.utils.data.Dataset):
-    def __init__(self, 
-        root_dir, domain, class_names,
-        extensions=['.jpg', '.jpeg', '.png', '.webp', '.gif']):
-
-        self.class_names = class_names
-        self.classes = len(self.class_names)
-
-        data_dir = root_dir + domain + '/'
-        self.dataset = []
-
-        for class_name in class_names:
-            dataset_per_class_name = []
-            image_dir = data_dir + class_name + '/'
-
-            for extension in extensions:
-                dataset_per_class_name += [[image_path, [class_name]] for image_path in glob.glob(image_dir + '*' + extension) if len(image_path) < 260]
-            
-            self.dataset += dataset_per_class_name
-    
-    def __len__(self):
-        return len(self.dataset)
-    
-    def __getitem__(self, index):
-        image_path, label = self.dataset[index]
-        
-        try:
-            image = Image.open(image_path).convert('RGB')
-            image = image_path
-        except:
-            image = None
-
-        return image, label
-
 class Dataset_For_Json(torch.utils.data.Dataset):
     def __init__(self, data_dict, domain, task, transform=None):
         self.task = task
@@ -66,10 +32,10 @@ class Dataset_For_Json(torch.utils.data.Dataset):
 
         self.class_dict = data_dict['class_dict']
         self.num_classes = data_dict['num_classes']
-    
+
     def __len__(self):
         return len(self.dataset)
-
+    
     def __getitem__(self, index):
         image_path, class_names = self.dataset[index]
         
