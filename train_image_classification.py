@@ -108,7 +108,7 @@ if __name__ == '__main__':
         'resize':transforms.Resize(args.image_size, Image.BICUBIC),
         'crop':transforms.CenterCrop(args.image_size)
     }
-
+    
     train_transforms = []
     for name in args.train_augment.split('-'):
         if name in train_augment_dict.keys():

@@ -1,154 +1,178 @@
-# Copyright (C) 2020 * Ltd. All rights reserved.
+# Copyright (C) 2021 * Ltd. All rights reserved.
 # author : Sanghyeon Jo <josanghyeokn@gmail.com>
 
 import os
-import sys
-import copy
+import cv2
 import glob
-import shutil
-import random
-import argparse
 import numpy as np
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from PIL import Image
+
 from torchvision import transforms
-from torch.utils.tensorboard import SummaryWriter
 
-from torch.utils.data import DataLoader
+from core import networks, datasets, losses
 
-from core.networks import *
-from core.datasets import *
-from core.losses import *
-
-from tools.general.io_utils import *
-from tools.general.txt_utils import *
-from tools.general.time_utils import *
-from tools.general.json_utils import *
-
-from tools.ai.log_utils import *
-from tools.ai.demo_utils import *
-from tools.ai.optim_utils import *
-from tools.ai.torch_utils import *
-from tools.ai.evaluate_utils import *
-
-from tools.ai.augment_utils import *
-from tools.ai.randaugment import *
-
-parser = argparse.ArgumentParser()
-
-###############################################################################
-# Dataset
-###############################################################################
-parser.add_argument('--dataset_name', default='leak', type=str)
-
-parser.add_argument('--webcam_index', default=-1, type=int)
-parser.add_argument('--video_path', default=None, type=str)
-parser.add_argument('--image_dir', default=None, type=str)
-parser.add_argument('--image_path', default=None, type=str)
-
-###############################################################################
-# Network
-###############################################################################
-parser.add_argument('--architecture', default='efficientnet-b5', type=str)
-
-###############################################################################
-# Hyperparameter
-###############################################################################
-parser.add_argument('--image_size', default=224, type=int)
-
-parser.add_argument('--tag', default='', type=str)
-parser.add_argument('--amp', default=False, type=str2bool)
+from tools.ai import torch_utils, augment_utils, demo_utils
+from tools.general import io_utils, json_utils, time_utils
 
 if __name__ == '__main__':
     ###################################################################################
-    # Arguments
+    # 1. Arguments
     ###################################################################################
-    args = parser.parse_args()
+    parser = io_utils.Parser()
+
+    # 1. dataset
+    parser.add('seed', 0, int)
+    parser.add('num_workers', 4, int)
+
+    parser.add('dataset_name', 'leak', str)
     
-    model_dir = create_directory('./experiments/models/')
+    # 2. networks
+    parser.add('architecture', 'efficientnet-b5', str)
+
+    # 3. hyperparameters
+    parser.add('image_size', 456, int)
+
+    parser.add('amp', False, bool)
+    parser.add('tag', '', str)
+
+    parser.add('task', 'multi-labels', str) # single-label or multi-labels
+
+    parser.add('webcam_index', -1, int)
+    parser.add('video_path', None, str)
+    parser.add('image_dir', None, str)
+    parser.add('image_path', None, str)
+
+    parser.add('test_augment', '', str) # resize-crop
+
+    parser.add('threshold', 0.5, float) # resize-crop
+    parser.add('visualization', 'cam', str)  # cam or black-and-white
+
+    parser.add('upper', False, bool)  # cam or black-and-white
+
+    args = parser.get_args()
+
+    ###################################################################################
+    # 2. Make directories and pathes.
+    ###################################################################################
+    model_dir = io_utils.create_directory('./experiments/models/')
     model_path = model_dir + f'{args.tag}.pth'
 
+    ###################################################################################
+    # 3. Set the seed number and define log function. 
+    ###################################################################################
+    torch_utils.set_seed(args.seed)
     log_func = lambda string='': print(string)
     
     log_func('[i] {}'.format(args.tag))
     log_func()
     
     ###################################################################################
-    # Transform, Dataset, DataLoader
+    # 4. Make transformation
     ###################################################################################
-    # 1. Transform
     imagenet_mean = [0.485, 0.456, 0.406]
     imagenet_std = [0.229, 0.224, 0.225]
-    
-    image_transform = transforms.Compose([
-        transforms.Resize(args.image_size, interpolation=Image.CUBIC),
-        transforms.CenterCrop(args.image_size),
 
-    ])
+    test_augment_dict = {
+        'resize':transforms.Resize(args.image_size, Image.BICUBIC),
+        'crop':transforms.CenterCrop(args.image_size)
+    }
 
-    torch_transform = transforms.Compose([
-        Normalize(imagenet_mean, imagenet_std),
-        Transpose(),
-        torch.from_numpy
+    test_transforms = []
+
+    if args.test_augment != '':
+        for name in args.test_augment.split('-'):
+            if name in test_augment_dict.keys():
+                transform = test_augment_dict[name]
+            else:
+                raise ValueError('unrecognize name of transform ({})'.format(name))
+            
+            test_transforms.append(transform)
+    
+        test_transform = transforms.Compose(test_transforms)
+    else:
+        test_transform = None
+
+    essential_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(imagenet_mean, imagenet_std)
     ])
     
-    # 2. Dataset
-    class_names = read_txt(f'./data/{args.dataset_name}.txt')
-    num_classes = len(class_names)
+    ###################################################################################
+    # 5. Make datasets
+    ###################################################################################
+    data_dict = json_utils.read_json(f'./data/{args.dataset_name}.json', encoding='utf-8')
 
     ###################################################################################
-    # Network
+    # 6. Make Network
     ###################################################################################
-    model = Tagging(args.architecture, num_classes, pretrained=False)
-    
-    model = model.cuda()
+    model = networks.Classifier(args.architecture, data_dict['num_classes'])
     model.eval()
-
+    
+    if torch.cuda.is_available():
+        model.cuda()
+    
     log_func('[i] Architecture is {}'.format(args.architecture))
-    log_func('[i] Total Params: %.2fM'%(calculate_parameters(model)))
+    log_func('[i] Total Params: %.2fM'%(torch_utils.calculate_parameters(model)))
     log_func()
     
-    load_model(model, model_path, parallel=False)
+    torch_utils.load_model(model, model_path, parallel=False)
     
     #################################################################################################
-    # Testing
+    # 7. Testing
     #################################################################################################
-    eval_timer = Timer()
+    eval_timer = time_utils.Timer()
 
     def process_for_image(image_path):
-        
         try:
             image = Image.open(image_path).convert('RGB')
-            image = image_transform(image)
         except:
             return None
 
-        inputs = torch_transform(image).unsqueeze(0).cuda()
+        if test_transform is not None:
+            image = test_transform(image)
+        inputs = essential_transform(image).unsqueeze(0).cuda()
 
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=args.amp):
                 logits, cams = model.forward_with_cam(inputs)
 
-                conf = F.softmax(logits, dim=1)[0].cpu().detach().numpy()
+                if args.task == 'multi-labels':
+                    confs = F.sigmoid(logits)
+                else:
+                    confs = F.softmax(logits, dim=1)
+
+                conf = confs[0].cpu().detach().numpy()
                 cam = cams[0].cpu().detach().numpy()
+
+        cond = np.sum(conf >= args.threshold) > 0
+
+        if args.upper:
+            if not cond:
+                return
+        else:
+            if cond:
+                return 
         
         image = np.asarray(image)[..., ::-1]
         h, w, c = image.shape
 
         cam = (cam * 255).astype(np.uint8)
 
-        for class_name, class_activation_map, confidence in zip(class_names, cam, conf):
+        for class_name, class_activation_map, confidence in zip(data_dict['class_names'], cam, conf):
             class_activation_map = cv2.resize(class_activation_map, (w, h), interpolation=cv2.INTER_LINEAR)
             
-            # class_activation_map = cv2.applyColorMap(class_activation_map, cv2.COLORMAP_JET)
-            # class_activation_map = cv2.addWeighted(image, 0.3, class_activation_map, 0.7, 0.0)
-
-            class_activation_map = image.astype(np.float32) * (class_activation_map[..., np.newaxis] / 255.).astype(np.float32)
-            class_activation_map = class_activation_map.astype(np.uint8)
-
+            if args.visualization == 'cam':
+                class_activation_map = cv2.applyColorMap(class_activation_map, cv2.COLORMAP_JET)
+                class_activation_map = cv2.addWeighted(image, 0.3, class_activation_map, 0.7, 0.0)
+            else:
+                class_activation_map = image.astype(np.float32) * (class_activation_map[..., np.newaxis] / 255.).astype(np.float32)
+                class_activation_map = class_activation_map.astype(np.uint8)
+            
             cv2.imshow(class_name, class_activation_map)
 
             print('# {} = {:.2f}%'.format(class_name, confidence * 100))
@@ -163,10 +187,8 @@ if __name__ == '__main__':
             video = cv2.VideoCapture(args.webcam_index)
         elif args.video_path is not None:
             video = cv2.VideoCapture(args.video_path)
-
     elif args.image_dir is not None:
         for image_path in glob.glob(args.image_dir + '*'):
             process_for_image(image_path)
-
-    else:
+    elif args.image_path is not None:
         process_for_image(args.image_path)
