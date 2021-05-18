@@ -275,7 +275,7 @@ if __name__ == '__main__':
         log_func('[i] epoch={epoch:,}, lr={lr:.6f}, loss={loss:.4f}, time={time:.0f}sec'.format(**data))
 
         # evaluation
-        if epoch % args.valid_ratio == 0:
+        if (epoch + 1) % args.valid_ratio == 0:
             valid_score, eval_time = evaluator.step()
             
             if best_valid_score == -1 or best_valid_score < valid_score:
