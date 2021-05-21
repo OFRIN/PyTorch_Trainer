@@ -42,7 +42,7 @@ if __name__ == '__main__':
 
     # 4. evaluation
     parser.add('task', 'multi-labels', str) # single-label or multi-labels
-    parser.add('test_augment', 'resize->crop', str) 
+    parser.add('test_augment', 'resize-crop', str) 
 
     args = parser.get_args()
     
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     imagenet_std = [0.229, 0.224, 0.225]
 
     test_transforms = []
-    for name in args.train_augment.split('->'):
+    for name in args.test_augment.split('-'):
         if name == 'resize':
             transform = transforms.Resize(args.image_size, Image.BICUBIC)
         elif name == 'crop':
@@ -136,15 +136,11 @@ if __name__ == '__main__':
     }
     evaluator = evaluating_utils.Evaluator(**evaluator_params)
     
-    # TODO: 
     if args.task == 'multi-labels':
         metric_name = 'C-F1'
     else:
-        metric_name = 'mean_accuracy'
-        log_func('')
+        (mean_accuracy, accuracy_dict), eval_time = evaluator.step(detail=True)
+        for class_name in data_dict['class_names']:
+            log_func('# {}, accuracy={:.2f}%'.format(class_name, accuracy_dict[class_name]))
+        log_func('# mean_accuracy={:.2f}%, time={:.0f}sec'.format(mean_accuracy, eval_time))
     
-    valid_score, eval_time = evaluator.step(detail=True)
-    log_func('[i] epoch={epoch:,}, score={score:.2f}%, best_score={best_score:.2f}%, time={time:.0f}sec'.format(**data))
-    
-    print(args.tag)
-
