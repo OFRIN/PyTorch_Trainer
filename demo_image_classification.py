@@ -17,7 +17,7 @@ from torchvision import transforms
 from core import networks, datasets, losses
 
 from tools.ai import torch_utils, augment_utils, demo_utils
-from tools.general import io_utils, json_utils, time_utils
+from tools.general import io_utils, json_utils, time_utils, string_utils
 
 if __name__ == '__main__':
     ###################################################################################
@@ -173,7 +173,11 @@ if __name__ == '__main__':
                 class_activation_map = image.astype(np.float32) * (class_activation_map[..., np.newaxis] / 255.).astype(np.float32)
                 class_activation_map = class_activation_map.astype(np.uint8)
             
-            cv2.imshow(class_name, class_activation_map)
+            if string_utils.is_english(class_name):
+                window_name = class_name
+            else:
+                window_name = str(data_dict['class_dict'][class_name])
+            cv2.imshow(window_name, class_activation_map)
 
             print('# {} = {:.2f}%'.format(class_name, confidence * 100))
 
