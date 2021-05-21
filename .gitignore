@@ -169,6 +169,8 @@ examples/
 data/chromedriver.exe
 
 data/nude_*.json
+data/hanmi_*.json
 
 make_fire_dataset.py
 make_nude_dataset.py
+make_hanmi_dataset.py
